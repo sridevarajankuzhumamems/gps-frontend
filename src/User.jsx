@@ -28,7 +28,9 @@ const User = () => {
   const socketRef = useRef(null);
 
   useEffect(() => {
-    socketRef.current = io('https://gps-backend-4mv.onrender.com');
+    socketRef.current = io('https://gps-backend-4mv.onrender.com', {
+      transports: ['websocket']
+    });
 
     socketRef.current.on('admin_status', (data) => {
       setAdminState(data);

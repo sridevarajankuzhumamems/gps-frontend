@@ -15,7 +15,9 @@ const Admin = () => {
   // Initialize Socket.io on mount
   useEffect(() => {
     // In production, this should be your server URL
-    socketRef.current = io('https://gps-backend-4mv.onrender.com');
+    socketRef.current = io('https://gps-backend-4mv.onrender.com', {
+      transports: ['websocket']
+    });
     
     // Fetch IP address
     fetch('https://api.ipify.org?format=json')
