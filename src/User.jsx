@@ -28,7 +28,7 @@ const User = () => {
   const socketRef = useRef(null);
 
   useEffect(() => {
-    socketRef.current = io('http://localhost:4000');
+    socketRef.current = io('https://gps-backend-4mv.onrender.com');
 
     socketRef.current.on('admin_status', (data) => {
       setAdminState(data);
