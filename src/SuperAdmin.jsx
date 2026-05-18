@@ -29,7 +29,7 @@ const SuperAdmin = () => {
   const socketRef = useRef(null);
 
   useEffect(() => {
-    socketRef.current = io('https://gps-backend-4mv.onrender.com', {
+    socketRef.current = io('https://api.sridevarajankuzhumam.in', {
       transports: ['websocket']
     });
 

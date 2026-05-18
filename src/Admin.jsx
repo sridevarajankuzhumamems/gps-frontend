@@ -15,7 +15,7 @@ const Admin = () => {
   // Initialize Socket.io on mount
   useEffect(() => {
     // In production, this should be your server URL
-    socketRef.current = io('https://gps-backend-4mv.onrender.com', {
+    socketRef.current = io('https://api.sridevarajankuzhumam.in', {
       transports: ['websocket']
     });
     
