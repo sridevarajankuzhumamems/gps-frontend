@@ -15,6 +15,10 @@ function ChangeView({ center }) {
   return null;
 }
 
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:4000'
+  : 'https://api.sridevarajankuzhumam.in';
+
 const User = () => {
   const [adminState, setAdminState] = useState({
     isSharing: false,
@@ -28,7 +32,7 @@ const User = () => {
   const socketRef = useRef(null);
 
   useEffect(() => {
-    socketRef.current = io('https://api.sridevarajankuzhumam.in', {
+    socketRef.current = io(API_BASE, {
       transports: ['websocket']
     });
 
