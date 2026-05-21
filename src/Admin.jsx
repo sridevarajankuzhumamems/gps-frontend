@@ -94,10 +94,6 @@ const Admin = () => {
       if (res.ok && data.success) {
         setIsOtpSent(true);
         setStatus('OTP sent! Please check your email.');
-        if (data.debugOtp) {
-          console.log(`[DEV ONLY] OTP code is: ${data.debugOtp}`);
-          setStatus(`OTP sent! Code (Dev Mode): ${data.debugOtp}`);
-        }
       } else {
         setError(data.error || 'Failed to send OTP. Try again.');
       }
