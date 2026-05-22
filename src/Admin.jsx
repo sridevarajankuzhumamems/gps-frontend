@@ -19,9 +19,48 @@ const Admin = () => {
   const [isSharing, setIsSharing] = useState(false);
   const [status, setStatus] = useState('');
   const [ipAddress, setIpAddress] = useState('Fetching...');
+  const [hasLoggedOut, setHasLoggedOut] = useState(false);
   
   const socketRef = useRef(null);
   const watchIdRef = useRef(null);
+
+  const attemptAutoLogin = async () => {
+    const savedDetailsStr = localStorage.getItem('adminDetails');
+    if (!savedDetailsStr) return false;
+
+    try {
+      const savedDetails = JSON.parse(savedDetailsStr);
+      if (savedDetails && savedDetails.email) {
+        setIsLoading(true);
+        const res = await fetch(`${API_BASE}/api/auto-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(savedDetails)
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          localStorage.setItem('adminToken', data.token);
+          setAdminData(data.admin);
+          setIsAuthenticated(true);
+          return true;
+        } else {
+          console.warn('Auto-login failed:', data.error);
+        }
+      }
+    } catch (err) {
+      console.error('Error parsing saved details or logging in:', err);
+    } finally {
+      setIsLoading(false);
+    }
+    return false;
+  };
+
+  const handleSwitchAccount = () => {
+    localStorage.removeItem('adminDetails');
+    setHasLoggedOut(false);
+    setError('');
+    setStatus('');
+  };
 
   // Initialize Socket.io and check token auto-login on mount
   useEffect(() => {
@@ -39,34 +78,34 @@ const Admin = () => {
       });
 
     // Check token persistence
-    const token = localStorage.getItem('adminToken');
-    if (token) {
-      setIsLoading(true);
-      fetch(`${API_BASE}/api/verify-token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
-      })
-        .then(res => {
-          if (!res.ok) throw new Error('Invalid token');
-          return res.json();
-        })
-        .then(data => {
-          if (data.success) {
+    const verifyExistingToken = async () => {
+      const token = localStorage.getItem('adminToken');
+      if (token) {
+        setIsLoading(true);
+        try {
+          const res = await fetch(`${API_BASE}/api/verify-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
             setAdminData(data.admin);
             setIsAuthenticated(true);
-          } else {
-            localStorage.removeItem('adminToken');
+            setIsLoading(false);
+            return;
           }
-        })
-        .catch(err => {
+        } catch (err) {
           console.warn('Auto-login session expired or server unreachable.', err.message);
-          localStorage.removeItem('adminToken');
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    }
+        }
+        localStorage.removeItem('adminToken');
+      }
+
+      // If token verification fails, try auto-login via saved details
+      await attemptAutoLogin();
+    };
+
+    verifyExistingToken();
 
     return () => {
       if (socketRef.current) socketRef.current.disconnect();
@@ -124,6 +163,7 @@ const Admin = () => {
       const data = await res.json();
       if (res.ok && data.success) {
         localStorage.setItem('adminToken', data.token);
+        localStorage.setItem('adminDetails', JSON.stringify(data.admin));
         setAdminData(data.admin);
         setIsAuthenticated(true);
         setStatus('Logged in successfully!');
@@ -141,6 +181,7 @@ const Admin = () => {
   const handleLogout = async () => {
     const token = localStorage.getItem('adminToken');
     localStorage.removeItem('adminToken');
+    setHasLoggedOut(true);
     setIsAuthenticated(false);
     setAdminData(null);
     setIsOtpSent(false);
@@ -254,65 +295,101 @@ const Admin = () => {
   }
 
   if (!isAuthenticated) {
+    const savedDetailsStr = localStorage.getItem('adminDetails');
+    let savedDetails = null;
+    try {
+      if (savedDetailsStr) savedDetails = JSON.parse(savedDetailsStr);
+    } catch (e) {
+      console.error('Error parsing saved details', e);
+    }
+
     return (
       <div className="container">
         <div className="panel">
           <h2>Admin Login Portal</h2>
-          <p className="data-label" style={{ marginBottom: '1.5rem' }}>Secure Email OTP Access</p>
           
           {error && <div className="error-badge" style={{ marginBottom: '1rem' }}>{error}</div>}
           {status && <div className="status-badge" style={{ marginBottom: '1rem' }}>{status}</div>}
 
-          {!isOtpSent ? (
-            <form onSubmit={handleSendOtp}>
-              <input 
-                type="text" 
-                placeholder="Full Name" 
-                value={name} 
-                onChange={e => setName(e.target.value)} 
-                required
-              />
-              <input 
-                type="tel" 
-                placeholder="Mobile Number" 
-                value={mobile} 
-                onChange={e => setMobile(e.target.value)} 
-                required
-              />
-              <input 
-                type="email" 
-                placeholder="Email Address" 
-                value={email} 
-                onChange={e => setEmail(e.target.value)} 
-                required
-              />
-              <button className="primary" type="submit" disabled={isLoading}>
-                {isLoading ? 'Requesting OTP...' : 'Send OTP'}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOtp}>
-              <input 
-                type="text" 
-                placeholder="Enter 6-Digit OTP" 
-                value={otp} 
-                onChange={e => setOtp(e.target.value)} 
-                maxLength={6}
-                required
-                style={{ textAlign: 'center', letterSpacing: '4px', fontSize: '1.2rem', fontWeight: 'bold' }}
-              />
-              <button className="primary" type="submit" disabled={isLoading}>
-                {isLoading ? 'Verifying OTP...' : 'Verify & Login'}
+          {savedDetails ? (
+            <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
+              <p className="data-label" style={{ marginBottom: '1.5rem' }}>Registered Device Access</p>
+              <div className="admin-info-card" style={{ background: 'rgba(255,255,255,0.03)', padding: '1.2rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '1.5rem', textAlign: 'left' }}>
+                <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem' }}><strong style={{ color: 'var(--primary)' }}>Name:</strong> {savedDetails.name}</p>
+                <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem' }}><strong style={{ color: 'var(--primary)' }}>Mobile:</strong> {savedDetails.mobile}</p>
+                <p style={{ margin: '0', fontSize: '0.95rem' }}><strong style={{ color: 'var(--primary)' }}>Email:</strong> {savedDetails.email}</p>
+              </div>
+              <button 
+                className="primary" 
+                onClick={() => attemptAutoLogin()} 
+                disabled={isLoading}
+                style={{ width: '100%', marginBottom: '1rem' }}
+              >
+                {isLoading ? 'Connecting...' : `Quick Login as ${savedDetails.name}`}
               </button>
               <button 
                 className="secondary" 
-                type="button" 
-                onClick={() => setIsOtpSent(false)} 
-                style={{ marginTop: '0.5rem', background: 'rgba(255,255,255,0.05)', color: '#fff' }}
+                onClick={handleSwitchAccount}
+                style={{ background: 'transparent', color: 'var(--text-muted)', border: 'none', fontSize: '0.85rem', cursor: 'pointer', textDecoration: 'underline', width: 'auto', padding: 0 }}
               >
-                Back to Details
+                Log in with a different account
               </button>
-            </form>
+            </div>
+          ) : (
+            <>
+              <p className="data-label" style={{ marginBottom: '1.5rem' }}>Secure Email OTP Access</p>
+              {!isOtpSent ? (
+                <form onSubmit={handleSendOtp}>
+                  <input 
+                    type="text" 
+                    placeholder="Full Name" 
+                    value={name} 
+                    onChange={e => setName(e.target.value)} 
+                    required
+                  />
+                  <input 
+                    type="tel" 
+                    placeholder="Mobile Number" 
+                    value={mobile} 
+                    onChange={e => setMobile(e.target.value)} 
+                    required
+                  />
+                  <input 
+                    type="email" 
+                    placeholder="Email Address" 
+                    value={email} 
+                    onChange={e => setEmail(e.target.value)} 
+                    required
+                  />
+                  <button className="primary" type="submit" disabled={isLoading}>
+                    {isLoading ? 'Requesting OTP...' : 'Send OTP'}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyOtp}>
+                  <input 
+                    type="text" 
+                    placeholder="Enter 6-Digit OTP" 
+                    value={otp} 
+                    onChange={e => setOtp(e.target.value)} 
+                    maxLength={6}
+                    required
+                    style={{ textAlign: 'center', letterSpacing: '4px', fontSize: '1.2rem', fontWeight: 'bold' }}
+                  />
+                  <button className="primary" type="submit" disabled={isLoading}>
+                    {isLoading ? 'Verifying OTP...' : 'Verify & Login'}
+                  </button>
+                  <button 
+                    className="secondary" 
+                    type="button" 
+                    onClick={() => setIsOtpSent(false)} 
+                    style={{ marginTop: '0.5rem', background: 'rgba(255,255,255,0.05)', color: '#fff' }}
+                  >
+                    Back to Details
+                  </button>
+                </form>
+              )}
+            </>
           )}
         </div>
       </div>
