@@ -88,6 +88,7 @@ const Admin = () => {
       }
       setError(data.message);
       setStatus('');
+      alert(data.message);
     });
 
     // Check token persistence
