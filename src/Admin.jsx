@@ -40,6 +40,7 @@ const Admin = () => {
         const data = await res.json();
         if (res.ok && data.success) {
           localStorage.setItem('adminToken', data.token);
+          localStorage.removeItem('adminLoggedOut'); // Clear logged out flag
           setAdminData(data.admin);
           setIsAuthenticated(true);
           return true;
@@ -57,6 +58,7 @@ const Admin = () => {
 
   const handleSwitchAccount = () => {
     localStorage.removeItem('adminDetails');
+    localStorage.removeItem('adminLoggedOut'); // Clear logged out flag
     setHasLoggedOut(false);
     setError('');
     setStatus('');
@@ -76,6 +78,17 @@ const Admin = () => {
         console.error('Failed to fetch IP', err);
         setIpAddress('Unknown');
       });
+
+    // Handle sharing rejection when another admin is active
+    socketRef.current.on('sharing_rejected', (data) => {
+      setIsSharing(false);
+      if (watchIdRef.current) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      setError(data.message);
+      setStatus('');
+    });
 
     // Check token persistence
     const verifyExistingToken = async () => {
@@ -101,8 +114,10 @@ const Admin = () => {
         localStorage.removeItem('adminToken');
       }
 
-      // If token verification fails, try auto-login via saved details
-      await attemptAutoLogin();
+      // If token verification fails, try auto-login via saved details ONLY if not explicitly logged out
+      if (localStorage.getItem('adminLoggedOut') !== 'true') {
+        await attemptAutoLogin();
+      }
     };
 
     verifyExistingToken();
@@ -164,6 +179,7 @@ const Admin = () => {
       if (res.ok && data.success) {
         localStorage.setItem('adminToken', data.token);
         localStorage.setItem('adminDetails', JSON.stringify(data.admin));
+        localStorage.removeItem('adminLoggedOut'); // Clear logged out flag
         setAdminData(data.admin);
         setIsAuthenticated(true);
         setStatus('Logged in successfully!');
@@ -181,6 +197,7 @@ const Admin = () => {
   const handleLogout = async () => {
     const token = localStorage.getItem('adminToken');
     localStorage.removeItem('adminToken');
+    localStorage.setItem('adminLoggedOut', 'true'); // Persist logged out flag
     setHasLoggedOut(true);
     setIsAuthenticated(false);
     setAdminData(null);
